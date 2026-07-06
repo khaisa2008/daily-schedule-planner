@@ -1,29 +1,19 @@
 // lib/supabase/client.ts
-import {
-  createClient as createSupabaseClient,
-  SupabaseClient,
-} from "@supabase/supabase-js";
+
+import { createBrowserClient } from "@supabase/ssr";
 import { Database } from "@/types/supabase/database";
 
-// Variable global untuk menyimpan instance browser agar tidak dibuat ulang
-let clientInstance: SupabaseClient<Database> | null = null;
+let client:
+  | ReturnType<typeof createBrowserClient<Database>>
+  | undefined;
 
 export function createClient() {
-  // Jika di server-side (SSR), selalu buat client baru
-  if (typeof window === "undefined") {
-    return createSupabaseClient<Database>(
+  if (!client) {
+    client = createBrowserClient<Database>(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
   }
 
-  // Jika di browser (client-side), buat sekali saja, sisanya gunakan yang sudah ada
-  if (!clientInstance) {
-    clientInstance = createSupabaseClient<Database>(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    );
-  }
-
-  return clientInstance;
+  return client;
 }
