@@ -1,0 +1,156 @@
+-- 1. Buat tabel profiles
+CREATE TABLE profiles (
+    id UUID REFERENCES auth.users(id) PRIMARY KEY,
+    email TEXT UNIQUE NOT NULL,
+    full_name TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. Buat tabel schedules
+CREATE TABLE schedules (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    user_id UUID REFERENCES profiles(id) NOT NULL,
+    hari TEXT NOT NULL CHECK (hari IN ('Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu')),
+    nama_kegiatan TEXT NOT NULL,
+    jam_mulai TIME NOT NULL,
+    jam_selesai TIME NOT NULL,
+    status status NOT NULL DEFAULT 'TODO',
+    kategori category DEFAULT 'OTHER',
+    priority priority NOT NULL DEFAULT 'MEDIUM',
+    catatan TEXT,
+    reminder_minutes INTEGER DEFAULT 10,
+    completed_at TIMESTAMP,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Buat tabel notifications
+CREATE TABLE notifications (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+
+    user_id UUID NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
+    schedule_id UUID REFERENCES schedules(id) ON DELETE CASCADE,
+
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+
+    is_read BOOLEAN DEFAULT FALSE,
+
+    notification_time TIMESTAMP WITH TIME ZONE NOT NULL,
+
+    sent_at TIMESTAMP WITH TIME ZONE,
+
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. Enable RLS
+ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE schedules ENABLE ROW LEVEL SECURITY;
+
+-- 4. RLS Policies
+CREATE POLICY "Users can view own profile"
+    ON profiles FOR SELECT
+    USING (auth.uid() = id);
+
+CREATE POLICY "Users can update own profile"
+    ON profiles FOR UPDATE
+    USING (auth.uid() = id);
+
+CREATE POLICY "Users can view own schedules"
+    ON schedules FOR SELECT
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own schedules"
+    ON schedules FOR INSERT
+    WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own schedules"
+    ON schedules FOR UPDATE
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own schedules"
+    ON schedules FOR DELETE
+    USING (auth.uid() = user_id);
+
+-- 5. Auto-update timestamp
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+CREATE TRIGGER update_profiles_updated_at
+    BEFORE UPDATE ON profiles
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_schedules_updated_at
+    BEFORE UPDATE ON schedules
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- 6. Auto-create profile saat register
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        NEW.raw_user_meta_data->>'full_name'
+    );
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW
+    EXECUTE FUNCTION public.handle_new_user();
+
+CREATE TYPE status AS ENUM (
+    'TODO',
+    'ONGOING',
+    'DONE',
+    'CANCELLED'
+);
+
+CREATE TYPE priority AS ENUM (
+    'HIGH',
+    'MEDIUM',
+    'LOW'
+);
+
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view own notifications"
+ON notifications
+FOR SELECT
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert own notifications"
+ON notifications
+FOR INSERT
+WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can update own notifications"
+ON notifications
+FOR UPDATE
+USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete own notifications"
+ON notifications
+FOR DELETE
+USING (auth.uid() = user_id);
+
+CREATE TYPE category AS ENUM (
+    'WORK',
+    'STUDY',
+    'HEALTH',
+    'PERSONAL',
+    'SOCIAL',
+    'OTHER'
+);

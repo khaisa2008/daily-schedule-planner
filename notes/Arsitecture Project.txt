@@ -1,0 +1,49 @@
+daily-schedule-planner/
+│
+├── app/
+│   │
+│   ├── auth/
+│   │      login/
+│   │         page.tsx
+│   │
+│   │      register/
+│   │         page.tsx
+│   │
+│   ├── dashboard/
+│   │      DashboardContent.tsx
+│   │      page.tsx
+│   │
+│   ├── days/
+│   │      [day]/
+|   |         page.tsx
+│   │
+│   ├── actions/
+│   │      schedule.ts
+│   │      useScheduleMonitor.ts
+│   │
+│   ├── layout.tsx
+│   └── globals.css
+│
+├── components/
+│      DayCard.tsx
+│      ScheduleCard.tsx
+│      ScheduleModal.tsx
+│      Navbar.tsx
+│      NotificationBell.tsx
+│      LoadingSpinner.tsx
+│  
+├── components/
+│      useScheduleMonitor.ts
+│
+├── lib/
+│      supabase/
+│            client.ts
+│            server.ts
+│            middleware.ts
+│
+├── types/
+│      database.ts
+│
+├── middleware.ts
+│
+└── package.json

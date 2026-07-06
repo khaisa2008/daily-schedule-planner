@@ -1,0 +1,15 @@
+npm install @supabase/ssr @supabase/supabase-js lucide-react tailwindcss
+npm install -D @types/node @types/react
+npm install @supabase/supabase-js @supabase/auth-helpers-nextjs
+npm install @supabase/auth-helpers-nextjs
+npx supabase gen types typescript --project-id PROJECT_ID | Out-File -Encoding utf8 types/database.ts
+npm install lucide-react
+npm install date-fns date-fns-tz
+npm install @capacitor-community/sqlite
+npm install @capacitor/filesystem
+npm install @capacitor/device
+npm install @supabase/supabase-js
+npm install @capacitor/push-notifications
+npm install @capacitor/core @capacitor/cli
+npx cap init DailySchedulePlanner com.yourcompany.dailyschedule
+npx cap add android
