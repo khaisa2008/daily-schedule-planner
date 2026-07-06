@@ -256,7 +256,7 @@ export function NotificationBell({ userId }: { userId: string }) {
     return curMinTotal > endMinTotal;
   };
 
-  return (
+return (
     <div className="relative">
       <button
         onClick={() => setIsOpen(!isOpen)}
@@ -273,17 +273,19 @@ export function NotificationBell({ userId }: { userId: string }) {
 
       {isOpen && (
         <>
+          {/* Backdrop gelap tipis hanya di mobile untuk fokus UX */}
           <div
-            className="fixed inset-0 z-40"
+            className="fixed inset-0 z-40 sm:bg-transparent"
             onClick={() => setIsOpen(false)}
           />
 
-          <div className="absolute right-0 mt-2 w-96 bg-white rounded-2xl border border-indigo-200 shadow-2xl z-50 overflow-hidden transform origin-top-right transition-all animate-in fade-in slide-in-from-top-2 duration-200">
+          <div className="fixed sm:absolute right-4 left-4 sm:left-auto sm:right-0 mt-2 sm:w-96 bg-white rounded-2xl border border-indigo-200 shadow-2xl z-50 overflow-hidden transform origin-top sm:origin-top-right transition-all animate-in fade-in slide-in-from-top-2 duration-200 max-h-[calc(100vh-100px)] sm:max-h-none">
+            
             <div className="p-4 border-b border-gray-100 bg-gray-50/70 flex items-center justify-between">
               <span className="font-bold text-xs text-gray-700 tracking-wider uppercase">
                 Notifikasi ({unreadCount} baru)
               </span>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
                 {unreadCount > 0 && (
                   <button
                     onClick={markAllAsRead}
@@ -292,11 +294,19 @@ export function NotificationBell({ userId }: { userId: string }) {
                     <Eye className="h-3.5 w-3.5 text-indigo-600" /> Baca semua
                   </button>
                 )}
+                {/* Tombol close tambahan khusus mobile */}
+                <button 
+                  onClick={() => setIsOpen(false)}
+                  className="sm:hidden p-1 rounded-lg hover:bg-gray-200 text-gray-500"
+                >
+                  <X className="h-4 w-4" />
+                </button>
               </div>
             </div>
 
+            {/* List scrollbar dengan tinggi adaptif */}
             <div
-              className="max-h-96 overflow-y-auto divide-y divide-gray-100 
+              className="max-h-[50vh] sm:max-h-96 overflow-y-auto divide-y divide-gray-100 
               [&::-webkit-scrollbar]:w-1.5 
               [&::-webkit-scrollbar-track]:bg-transparent 
               [&::-webkit-scrollbar-thumb]:bg-indigo-400 
@@ -312,12 +322,10 @@ export function NotificationBell({ userId }: { userId: string }) {
                 </div>
               ) : (
                 notifications.map((notif) => {
-                  // Jika data schedule belum ter-fetch (sedang loading/realtime sync), tunda eksekusi filter destruktif
                   if (!notif.schedules && notif.schedule_id) {
                     return null; 
                   }
 
-                  // CEK: Apakah notifikasi expired (Mati jika melewati jam selesai)
                   if (
                     isNotificationExpired(notif) &&
                     notif.schedules?.status === "TODO" &&
@@ -336,7 +344,6 @@ export function NotificationBell({ userId }: { userId: string }) {
                   const isAfterEnd = isAfterEndTime(notif);
                   const hasBeenClicked = isReadyClicked(notif);
 
-                  // 1. KONDISI: Jika tombol READY sudah diklik
                   if (isReadyNotification && hasBeenClicked) {
                     return (
                       <div
@@ -351,7 +358,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                           <Check className="h-4 w-4 text-green-600" />
                         </div>
 
-                        <div className="flex-1 min-w-0 pr-6">
+                        <div className="flex-1 min-w-0 pr-8">
                           <p className="text-xs font-semibold leading-snug text-green-700">
                             {notif.title} 
                           </p>
@@ -371,18 +378,18 @@ export function NotificationBell({ userId }: { userId: string }) {
                           </span>
                         </div>
 
+                        {/* Tombol hapus: selalu tampil di mobile (`opacity-100`), tersembunyi di desktop hingga di-hover (`sm:opacity-0`) */}
                         <button
                           onClick={() => deleteNotification(notif.id)}
                           title="Hapus notifikasi"
-                          className="absolute right-3 top-4 p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
+                          className="absolute right-2 top-4 p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
                         >
-                          <X className="h-3.5 w-3.5 text-gray-400 group-hover:text-red-600" />
+                          <X className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-gray-400 group-hover:text-red-600" />
                         </button>
                       </div>
                     );
                   }
 
-                  // 2. KONDISI: Jika sudah melewati jam selesai tapi belum diklik
                   if (isReadyNotification && isAfterEnd && !hasBeenClicked) {
                     deleteNotification(notif.id);
                     if (notif.schedule_id) {
@@ -396,7 +403,6 @@ export function NotificationBell({ userId }: { userId: string }) {
                     return null;
                   }
 
-                  // 3. KONDISI: Tampilkan tombol READY jika dalam rentang waktu aktif
                   if (isReadyNotification && isWithinRange && !hasBeenClicked) {
                     return (
                       <div
@@ -411,7 +417,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                           <Play className="h-4 w-4 text-indigo-600" />
                         </div>
 
-                        <div className="flex-1 min-w-0 pr-6">
+                        <div className="flex-1 min-w-0 pr-8">
                           <p className="text-xs font-semibold leading-snug text-indigo-950">
                             {notif.title}
                           </p>
@@ -424,9 +430,10 @@ export function NotificationBell({ userId }: { userId: string }) {
                           </span>
 
                           <div className="flex gap-2 mt-3">
+                            {/* Tombol lebar penuh (`w-full`) di mobile untuk kemudahan ketukan jari */}
                             <button
                               onClick={() => handleReadyClick(notif)}
-                              className="inline-flex items-center space-x-1.5 px-3 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all hover:scale-[1.02] active:scale-[0.98]"
+                              className="inline-flex items-center space-x-1.5 px-3 py-2 sm:py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg shadow-sm transition-all active:scale-[0.98] w-full sm:w-auto justify-center"
                             >
                               <Play className="h-3 w-3 text-white fill-current" />{" "}
                               <span>Ready</span>
@@ -437,15 +444,14 @@ export function NotificationBell({ userId }: { userId: string }) {
                         <button
                           onClick={() => deleteNotification(notif.id)}
                           title="Hapus notifikasi"
-                          className="absolute right-3 top-4 p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
+                          className="absolute right-2 top-4 p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
                         >
-                          <X className="h-3.5 w-3.5 text-gray-400 group-hover:text-red-600" />
+                          <X className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-gray-400 group-hover:text-red-600" />
                         </button>
                       </div>
                     );
                   }
 
-                  // 4. KONDISI: Notifikasi standar / tipe lainnya
                   return (
                     <div
                       key={notif.id}
@@ -459,7 +465,7 @@ export function NotificationBell({ userId }: { userId: string }) {
                         <Bell className="h-4 w-4 text-indigo-600" />
                       </div>
 
-                      <div className="flex-1 min-w-0 pr-6">
+                      <div className="flex-1 min-w-0 pr-8">
                         <p className="text-xs font-semibold leading-snug text-gray-700">
                           {notif.title}
                         </p>
@@ -475,9 +481,9 @@ export function NotificationBell({ userId }: { userId: string }) {
                       <button
                         onClick={() => deleteNotification(notif.id)}
                         title="Hapus notifikasi"
-                        className="absolute right-3 top-4 p-1 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
+                        className="absolute right-2 top-4 p-2 rounded-md text-gray-400 hover:text-red-600 hover:bg-red-50 opacity-100 sm:opacity-0 group-hover:opacity-100 transition-all focus:outline-none"
                       >
-                        <X className="h-3.5 w-3.5 text-gray-400 group-hover:text-red-600" />
+                        <X className="h-4 w-4 sm:h-3.5 sm:w-3.5 text-gray-400 group-hover:text-red-600" />
                       </button>
                     </div>
                   );

@@ -4,7 +4,7 @@ const config: CapacitorConfig = {
   appId: "com.kevin.dailyschedule",
   appName: "DailySchedulePlanner",
   server: {
-    url: "https",
+    url: "https://daily-schedule-planner-khai.vercel.app",
     cleartext: false,
   },
 };

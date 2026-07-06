@@ -231,6 +231,7 @@ export function ScheduleCard({
   // Tentukan apakah tombol edit/delete ditampilkan
   const showEditDelete = (!showReadyButton || isNowAfterEnd()) && (isTodo || isCancelled || isDone);
 
+  const [isTooltipOpen, setIsTooltipOpen] = useState(false);
   return (
     <>
       <div className="flex items-start group relative pl-10 pb-5">
@@ -246,53 +247,65 @@ export function ScheduleCard({
 
         {/* DOT */}
         <div
-          className={`absolute left-3 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center bg-white z-10 border-2 group/dot cursor-pointer top-10 ${
-            isOngoing ? "border-indigo-700" : 
-            isCancelled ? "border-red-500" :
-            isDone ? "border-green-500" :
-            "border-indigo-400"
-          }`}
-        >
-          {/* TOOLTIP STATUS */}
-          {currentStatus && (
-            <div className={`absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-white text-xs font-bold px-3 py-1.5 rounded-lg border shadow-xl pointer-events-none opacity-0 scale-95 group-hover/dot:opacity-100 group-hover/dot:scale-100 z-30 flex items-center gap-2 ${
-              isOngoing ? "text-indigo-600 border-indigo-100" :
-              isCancelled ? "text-red-600 border-red-100" :
-              isDone ? "text-green-600 border-green-100" :
-              "text-indigo-600 border-indigo-100"
-            }`}>
-              <span
-                className={`w-2 h-2 rounded-full ${
-                  isOngoing ? "bg-indigo-600 animate-pulse" : 
-                  isCancelled ? "bg-red-500" :
-                  isDone ? "bg-green-500" :
-                  "bg-indigo-600"
-                }`}
-              />
-              <span
-                className={`uppercase tracking-wider ${isOngoing ? "animate-pulse" : ""}`}
-              >
-                {isOngoing ? "NOW" : currentStatus}
-              </span>
-              <div className={`absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] ${
-                isOngoing ? "border-t-white" :
-                isCancelled ? "border-t-white" :
-                isDone ? "border-t-white" :
-                "border-t-white"
-              } drop-shadow-[0_1px_0_rgba(224,231,255,1)]`} />
-            </div>
-          )}
-
-          {/* Bulatan Inti DOT */}
-          <div
-            className={`w-2 h-2 rounded-full ${
-              isOngoing ? "bg-indigo-700" : 
-              isCancelled ? "bg-red-500" :
-              isDone ? "bg-green-500" :
-              "bg-indigo-400"
-            }`}
+        onClick={() => setIsTooltipOpen(!isTooltipOpen)}
+        className={`absolute left-3 -translate-x-1/2 w-6 h-6 rounded-full flex items-center justify-center bg-white z-10 border-2 cursor-pointer top-10 transition-all ${
+          isOngoing ? "border-indigo-700 shadow-sm" : 
+          isCancelled ? "border-red-500" :
+          isDone ? "border-green-500" :
+          "border-indigo-400"
+        }`}
+      >
+        {/* Backdrop transparan khusus untuk mendeteksi klik di luar DOT agar tooltip menutup kembali */}
+        {isTooltipOpen && (
+          <div 
+            className="fixed inset-0 z-20 cursor-default" 
+            onClick={(e) => {
+              e.stopPropagation(); // Mencegah trigger onClick milik DOT berjalan ulang
+              setIsTooltipOpen(false);
+            }}
           />
-        </div>
+        )}
+
+        {/* TOOLTIP STATUS */}
+        {currentStatus && (
+          /* 3. Mengubah class opacity & scale berdasarkan state `isTooltipOpen` alih-alih group-hover */
+          <div className={`absolute bottom-full mb-2.5 left-1/2 -translate-x-1/2 whitespace-nowrap bg-white text-xs font-bold px-3 py-1.5 rounded-lg border shadow-xl transition-all duration-200 z-30 flex items-center gap-2 ${
+            isTooltipOpen 
+              ? "opacity-100 scale-100 pointer-events-auto" 
+              : "opacity-0 scale-95 pointer-events-none"
+          } ${
+            isOngoing ? "text-indigo-600 border-indigo-100" :
+            isCancelled ? "text-red-600 border-red-100" :
+            isDone ? "text-green-600 border-green-100" :
+            "text-indigo-600 border-indigo-100"
+          }`}>
+            <span
+              className={`w-2 h-2 rounded-full ${
+                isOngoing ? "bg-indigo-600 animate-pulse" : 
+                isCancelled ? "bg-red-500" :
+                isDone ? "bg-green-500" :
+                "bg-indigo-600"
+              }`}
+            />
+            <span
+              className={`uppercase tracking-wider ${isOngoing ? "animate-pulse" : ""}`}
+            >
+              {isOngoing ? "NOW" : currentStatus}
+            </span>
+            <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-white drop-shadow-[0_1px_0_rgba(224,231,255,1)]" />
+          </div>
+        )}
+
+        {/* Bulatan Inti DOT */}
+        <div
+          className={`w-2 h-2 rounded-full transition-transform ${isTooltipOpen ? "scale-125" : ""} ${
+            isOngoing ? "bg-indigo-700" : 
+            isCancelled ? "bg-red-500" :
+            isDone ? "bg-green-500" :
+            "bg-indigo-400"
+          }`}
+        />
+      </div>
 
         {/* CARD */}
         <div

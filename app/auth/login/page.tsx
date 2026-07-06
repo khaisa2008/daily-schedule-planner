@@ -34,10 +34,13 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data ,error } = await supabase.auth.signInWithPassword({
         email: formData.email,
         password: formData.password,
       });
+
+      console.log(data);
+      console.log(error);
 
       if (error) throw error;
 
