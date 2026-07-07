@@ -1,7 +1,7 @@
-// DashboardContent.tsx
+// app/dashboard/DashboardContent.tsx
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   Calendar,
   Clock,
@@ -14,20 +14,9 @@ import {
   Target,
   Zap,
 } from "lucide-react";
+import { createClient } from "@/lib/supabase/client";
 
-// Data dummy untuk statistik dan grafik
-const getDummyStats = () => {
-  return {
-    totalActivities: Math.floor(Math.random() * 30) + 10,
-    completedToday: Math.floor(Math.random() * 8),
-    pendingTasks: Math.floor(Math.random() * 5),
-    weeklyProgress: Math.floor(Math.random() * 40) + 60,
-    productivity: Math.floor(Math.random() * 30) + 70,
-    totalHours: Math.floor(Math.random() * 20) + 10,
-  };
-};
-
-// Data dummy untuk chart aktivitas per jam
+// Data dummy untuk grafik
 const getDummyHourlyData = () => {
   const hours = [
     "06:00",
@@ -42,7 +31,6 @@ const getDummyHourlyData = () => {
   return hours.map(() => Math.floor(Math.random() * 8) + 1);
 };
 
-// Data dummy untuk distribusi kategori
 const getDummyCategoryData = () => {
   return {
     work: Math.floor(Math.random() * 30) + 20,
@@ -53,18 +41,146 @@ const getDummyCategoryData = () => {
   };
 };
 
+interface DashboardStats {
+  totalActivities: number;
+  completedToday: number;
+  pendingTasks: number;
+  totalHours: number;
+}
+
 interface DashboardContentProps {
   userEmail?: string;
+  userId?: string;
   busiestDay?: { day: string; count: number };
 }
 
 export default function DashboardContent({ 
   userEmail = "user@example.com",
+  userId = "",
   busiestDay = { day: "Senin", count: 5 }
 }: DashboardContentProps) {
-  const [stats] = useState(getDummyStats());
+  const [stats, setStats] = useState<DashboardStats>({
+    totalActivities: 0,
+    completedToday: 0,
+    pendingTasks: 0,
+    totalHours: 0,
+  });
+  const [loading, setLoading] = useState(true);
   const [hourlyData] = useState(getDummyHourlyData());
   const [categoryData] = useState(getDummyCategoryData());
+
+  // Fetch data dari database
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!userId) {
+        setLoading(false);
+        return;
+      }
+
+      try {
+        const supabase = createClient();
+        
+        // 1. Total activities
+        const { count: totalActivities, error: totalError } = await supabase
+          .from("schedules")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId);
+
+        if (totalError) {
+          console.error("Error fetching total activities:", totalError);
+        }
+
+        // 2. Completed today (status DONE)
+        const today = new Date().toISOString().split('T')[0];
+        const { count: completedToday, error: completedError } = await supabase
+          .from("schedules")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .eq("status", "DONE")
+          .gte("updated_at", today);
+
+        if (completedError) {
+          console.error("Error fetching completed today:", completedError);
+        }
+
+        // 3. Pending tasks (status TODO atau ONGOING) - PERBAIKAN DI SINI
+        const { count: pendingTasks, error: pendingError } = await supabase
+          .from("schedules")
+          .select("*", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .in("status", ["TODO", "ONGOING"]); // Ubah dari "IN_PROGRESS" menjadi "ONGOING"
+
+        if (pendingError) {
+          console.error("Error fetching pending tasks:", pendingError);
+        }
+
+        // 4. Total hours
+        // Untuk menghitung total jam, kita bisa query semua data dan hitung durasinya
+        let totalHours = 0;
+        try {
+          const { data: schedules, error: hoursError } = await supabase
+            .from("schedules")
+            .select("jam_mulai, jam_selesai")
+            .eq("user_id", userId);
+
+          if (!hoursError && schedules) {
+            schedules.forEach((schedule: any) => {
+              if (schedule.jam_mulai && schedule.jam_selesai) {
+                const start = new Date(`1970-01-01T${schedule.jam_mulai}`);
+                const end = new Date(`1970-01-01T${schedule.jam_selesai}`);
+                const diffHours = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+                if (diffHours > 0) {
+                  totalHours += diffHours;
+                }
+              }
+            });
+            totalHours = Math.round(totalHours * 10) / 10; // Pembulatan 1 desimal
+          }
+        } catch (hoursError) {
+          console.error("Error calculating total hours:", hoursError);
+        }
+
+        setStats({
+          totalActivities: totalActivities || 0,
+          completedToday: completedToday || 0,
+          pendingTasks: pendingTasks || 0,
+          totalHours: totalHours || 0,
+        });
+      } catch (error) {
+        console.error("Error fetching dashboard stats:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, [userId]);
+
+  // Jika loading, tampilkan skeleton
+  if (loading) {
+    return (
+      <div className="flex-1 min-w-0">
+        <div className="mb-6">
+          <div className="h-8 w-64 bg-gray-200 rounded animate-pulse"></div>
+          <div className="h-4 w-48 bg-gray-200 rounded animate-pulse mt-2"></div>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          {[...Array(4)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm p-4">
+              <div className="h-12 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+          {[...Array(2)].map((_, i) => (
+            <div key={i} className="bg-white rounded-xl shadow-sm p-4">
+              <div className="h-20 bg-gray-200 rounded animate-pulse"></div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex-1 min-w-0">
@@ -145,21 +261,27 @@ export default function DashboardContent({
 
       {/* Progress & Productivity */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        {/* Weekly Progress */}
+        {/* Weekly Progress - Hitung dari data real */}
         <div className="bg-white rounded-xl shadow-sm p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
               <Target className="w-4 h-4" />
-              Weekly Progress
+              Task Completion Rate
             </h3>
             <span className="text-sm font-bold text-indigo-600">
-              {stats.weeklyProgress}%
+              {stats.totalActivities > 0 
+                ? Math.round((stats.completedToday / stats.totalActivities) * 100) 
+                : 0}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
               className="bg-gradient-to-r from-indigo-500 to-purple-500 h-3 rounded-full transition-all duration-1000"
-              style={{ width: `${stats.weeklyProgress}%` }}
+              style={{ 
+                width: `${stats.totalActivities > 0 
+                  ? Math.round((stats.completedToday / stats.totalActivities) * 100) 
+                  : 0}%` 
+              }}
             />
           </div>
           <div className="flex justify-between mt-2 text-xs text-gray-400">
@@ -177,13 +299,19 @@ export default function DashboardContent({
               Productivity Score
             </h3>
             <span className="text-sm font-bold text-green-600">
-              {stats.productivity}%
+              {stats.totalActivities > 0 
+                ? Math.min(100, Math.round((stats.completedToday / Math.max(1, stats.totalActivities)) * 100) + 20) 
+                : 0}%
             </span>
           </div>
           <div className="w-full bg-gray-200 rounded-full h-3">
             <div
               className="bg-gradient-to-r from-green-400 to-emerald-500 h-3 rounded-full transition-all duration-1000"
-              style={{ width: `${stats.productivity}%` }}
+              style={{ 
+                width: `${stats.totalActivities > 0 
+                  ? Math.min(100, Math.round((stats.completedToday / Math.max(1, stats.totalActivities)) * 100) + 20) 
+                  : 0}%` 
+              }}
             />
           </div>
           <div className="flex justify-between mt-2 text-xs text-gray-400">
@@ -267,7 +395,7 @@ export default function DashboardContent({
       </div>
 
       {/* Busiest Day Info */}
-      {busiestDay.count > 0 && (
+      {busiestDay && busiestDay.count > 0 && (
         <div className="mt-6 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl shadow-sm p-4 border border-indigo-100">
           <div className="flex items-center gap-3">
             <TrendingUp className="w-6 h-6 text-indigo-600" />

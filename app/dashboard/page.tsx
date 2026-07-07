@@ -1,3 +1,4 @@
+// app/dashboard/page.tsx
 "use client";
 
 import { useEffect, useState } from "react";
@@ -167,7 +168,8 @@ export default function DashboardPage() {
 
           {/* Konten Utama - DashboardContent */}
           <DashboardContent 
-            userEmail={user?.email}
+            userEmail={user?.email || ""}
+            userId={user?.id || ""} // Kirim userId
             busiestDay={busiestDay}
           />
         </div>
