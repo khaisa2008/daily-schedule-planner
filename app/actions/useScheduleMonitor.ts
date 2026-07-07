@@ -10,30 +10,43 @@ export function useScheduleMonitor(userId: string | undefined) {
   const supabase = createClient();
   const triggeredNotifications = useRef<Set<string>>(new Set());
   const intervalRef = useRef<NodeJS.Timeout | undefined>(undefined);
-  const notificationIdCounter = useRef(0); // Untuk generate unique ID
+  const notificationIdCounter = useRef(0);
+  const realtimeUnsubscribe = useRef<(() => void) | null>(null);
 
-useEffect(() => {
-  if (!userId) return;
+  useEffect(() => {
+    if (!userId) return;
 
-  // Request permission saat mount
-  notificationService.requestPermissions();
+    // Request permission saat mount
+    notificationService.requestPermissions();
 
-  // 1. Buat variabel penampung untuk listener asli
-  let activeListener: { remove: () => void } | null = null;
+    // 🔥 SUBSCRIBE KE REALTIME NOTIFICATIONS
+    notificationService.subscribeToRealtimeNotifications(userId);
 
-  // 2. Selesaikan promise dari addListener
-  notificationService.addListener((notification) => {
-    console.log('👆 Notification tapped:', notification);
-    const { extra } = notification.notification;
-    
-    if (extra?.scheduleId && extra?.type === 'ready') {
-      console.log(`🔔 User tapped ready notification for schedule: ${extra.scheduleId}`);
-    }
-  }).then((res) => {
-    activeListener = res; // Simpan objek asli jika promise selesai
-  });
+    // 🔥 Register callback untuk realtime notifications
+    const unsubscribe = notificationService.onNotificationReceived((notification) => {
+      console.log('📨 Real-time notification received in UI:', notification);
+      
+      // 📌 OPSIONAL: Update UI atau trigger efek lain
+      // Misalnya, update badge counter atau show toast
+    });
+    realtimeUnsubscribe.current = unsubscribe;
 
-    // ============ REALTIME SUBSCRIPTION ============
+    // 1. Buat variabel penampung untuk listener asli
+    let activeListener: { remove: () => void } | null = null;
+
+    // 2. Selesaikan promise dari addListener
+    notificationService.addListener((notification) => {
+      console.log('👆 Notification tapped:', notification);
+      const { extra } = notification.notification;
+      
+      if (extra?.scheduleId && extra?.type === 'ready') {
+        console.log(`🔔 User tapped ready notification for schedule: ${extra.scheduleId}`);
+      }
+    }).then((res) => {
+      activeListener = res;
+    });
+
+    // ============ REALTIME SUBSCRIPTION SCHEDULES ============
     const channel = supabase
       .channel(`schedule-monitor-${userId}`)
       .on(
@@ -45,7 +58,7 @@ useEffect(() => {
           filter: `user_id=eq.${userId}`,
         },
         (payload) => {
-          console.log("📡 Realtime update detected:", payload);
+          console.log("📡 Realtime schedule update detected:", payload);
           checkSchedules();
         }
       )
@@ -113,7 +126,7 @@ useEffect(() => {
                 .gte("created_at", new Date(now).setHours(0, 0, 0, 0).toString());
 
               if (!existingNotif || existingNotif.length === 0) {
-                // Insert ke database
+                // Insert ke database (akan trigger realtime notification)
                 await supabase.from("notifications").insert({
                   user_id: userId,
                   schedule_id: schedule.id,
@@ -124,15 +137,8 @@ useEffect(() => {
                   metadata: { type: "expired" }
                 });
 
-                // Kirim native notification
-                await notificationService.scheduleNotification({
-                  id: notificationIdCounter.current++,
-                  title: "⏰ Waktu telah melewati batas",
-                  body: `Kegiatan "${schedule.nama_kegiatan}" dibatalkan karena melewati batas waktu`,
-                  scheduleTime: new Date(),
-                  scheduleId: schedule.id,
-                  extra: { type: "expired" }
-                });
+                // 🔥 NATIVE NOTIFICATION AKAN DI-TRIGGER OLEH REALTIME
+                // Tidak perlu schedule manual lagi
               }
             }
 
@@ -157,27 +163,18 @@ useEffect(() => {
               .gte("created_at", startOfDay.toISOString());
 
             if (!existingNotif || existingNotif.length === 0) {
-              // Insert ke database
+              // Insert ke database (akan trigger realtime notification)
               await supabase.from("notifications").insert({
                 user_id: userId,
                 schedule_id: schedule.id,
-                title: "Pengingat Kegiatan",
+                title: "🔔 Pengingat Kegiatan",
                 message: `Kegiatan "${schedule.nama_kegiatan}" akan dimulai dalam ${reminderMinutes} menit.`,
                 notification_time: new Date().toISOString(),
                 is_read: false,
                 metadata: { type: "reminder" }
               });
 
-              // Kirim native notification
-              const notificationTime = new Date(now.getTime() + (reminderMinutes - 2) * 60000);
-              await notificationService.scheduleNotification({
-                id: notificationIdCounter.current++,
-                title: "🔔 Pengingat Kegiatan",
-                body: `"${schedule.nama_kegiatan}" akan dimulai dalam ${reminderMinutes} menit`,
-                scheduleTime: notificationTime,
-                scheduleId: schedule.id,
-                extra: { type: "reminder" }
-              });
+              // 🔥 NATIVE NOTIFICATION AKAN DI-TRIGGER OLEH REALTIME
             }
             triggeredNotifications.current.add(key);
           }
@@ -202,22 +199,14 @@ useEffect(() => {
               await supabase.from("notifications").insert({
                 user_id: userId,
                 schedule_id: schedule.id,
-                title: "Segera Dimulai!",
+                title: "⏰ Segera Dimulai!",
                 message: `Kegiatan "${schedule.nama_kegiatan}" akan dimulai dalam 2 menit.`,
                 notification_time: new Date().toISOString(),
                 is_read: false,
-                metadata: { type: "reminder" }
+                metadata: { type: "urgent" }
               });
 
-              // Kirim native notification (immediate)
-              await notificationService.scheduleNotification({
-                id: notificationIdCounter.current++,
-                title: "⏰ Segera Dimulai!",
-                body: `"${schedule.nama_kegiatan}" akan dimulai dalam 2 menit!`,
-                scheduleTime: new Date(now.getTime() + 1000),
-                scheduleId: schedule.id,
-                extra: { type: "urgent" }
-              });
+              // 🔥 NATIVE NOTIFICATION AKAN DI-TRIGGER OLEH REALTIME
             }
             triggeredNotifications.current.add(key);
           }
@@ -242,22 +231,14 @@ useEffect(() => {
               await supabase.from("notifications").insert({
                 user_id: userId,
                 schedule_id: schedule.id,
-                title: "Waktunya Dimulai!",
+                title: "▶️ Waktunya Dimulai!",
                 message: `Kegiatan "${schedule.nama_kegiatan}" sudah memasuki waktu mulai. Silakan klik 'Ready'.`,
                 notification_time: new Date().toISOString(),
                 is_read: false,
                 metadata: { type: "ready" }
               });
 
-              // Kirim native notification dengan action
-              await notificationService.scheduleNotification({
-                id: notificationIdCounter.current++,
-                title: "▶️ Waktunya Dimulai!",
-                body: `"${schedule.nama_kegiatan}" sudah dimulai. Buka aplikasi untuk mulai aktivitas!`,
-                scheduleTime: new Date(),
-                scheduleId: schedule.id,
-                extra: { type: "ready" }
-              });
+              // 🔥 NATIVE NOTIFICATION AKAN DI-TRIGGER OLEH REALTIME
             }
             triggeredNotifications.current.add(key);
           }
@@ -279,23 +260,14 @@ useEffect(() => {
             await supabase.from("notifications").insert({
               user_id: userId,
               schedule_id: schedule.id,
-              title: "Kegiatan Selesai",
-              message: `Kegiatan "${schedule.nama_kegiatan}" telah selesai.`,
+              title: "✅ Kegiatan Selesai",
+              message: `Kegiatan "${schedule.nama_kegiatan}" telah selesai. Selamat!`,
               notification_time: new Date().toISOString(),
               is_read: false,
               metadata: { type: "done" }
             });
 
-            // Kirim native notification selesai
-            await notificationService.scheduleNotification({
-              id: notificationIdCounter.current++,
-              title: "✅ Kegiatan Selesai",
-              body: `"${schedule.nama_kegiatan}" telah selesai. Selamat!`,
-              scheduleTime: new Date(),
-              scheduleId: schedule.id,
-              extra: { type: "done" }
-            });
-
+            // 🔥 NATIVE NOTIFICATION AKAN DI-TRIGGER OLEH REALTIME
             triggeredNotifications.current.add(key);
           }
         }
@@ -305,7 +277,7 @@ useEffect(() => {
     checkSchedules();
     intervalRef.current = setInterval(checkSchedules, 1000);
 
-  return () => {
+    return () => {
       if (intervalRef.current) {
         clearInterval(intervalRef.current);
       }
@@ -314,6 +286,14 @@ useEffect(() => {
       if (activeListener) {
         activeListener.remove();
       }
+
+      // 🔥 Unsubscribe dari realtime notifications
+      if (realtimeUnsubscribe.current) {
+        realtimeUnsubscribe.current();
+      }
+      
+      // 🔥 Unsubscribe dari channel realtime
+      notificationService.unsubscribeFromRealtime();
     };
   }, [userId, supabase]);
 }

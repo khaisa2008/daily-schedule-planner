@@ -1,15 +1,106 @@
 // lib/notifications/notification.service.ts
 import { LocalNotifications } from '@capacitor/local-notifications';
 import { Capacitor } from '@capacitor/core';
+import { createClient } from '@/lib/supabase/client';
 
 export class NotificationService {
   private static instance: NotificationService;
+  private supabase = createClient();
+  private realtimeChannel: any = null;
+  private notificationCallbacks: ((notification: any) => void)[] = [];
   
   static getInstance() {
     if (!this.instance) {
       this.instance = new NotificationService();
     }
     return this.instance;
+  }
+
+  // 🔥 TAMBAHKAN: Subscribe ke realtime notifications
+  async subscribeToRealtimeNotifications(userId: string) {
+    // Unsubscribe dari channel sebelumnya jika ada
+    if (this.realtimeChannel) {
+      await this.supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+    }
+
+    console.log('📡 Subscribing to realtime notifications for user:', userId);
+
+    this.realtimeChannel = this.supabase
+      .channel(`realtime-notifications-${userId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${userId}`,
+        },
+        async (payload) => {
+          console.log('📨 New notification received:', payload);
+          const notification = payload.new;
+          
+          // 🔥 Trigger native notification popup
+          await this.showNativeNotification(notification);
+          
+          // 🔥 Trigger semua callback yang terdaftar
+          this.notificationCallbacks.forEach(callback => {
+            callback(notification);
+          });
+        }
+      )
+      .subscribe((status) => {
+        console.log('📡 Realtime subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log('✅ Successfully subscribed to realtime notifications');
+        }
+      });
+
+    return this.realtimeChannel;
+  }
+
+  // 🔥 TAMBAHKAN: Tampilkan native notification popup
+  private async showNativeNotification(notification: any) {
+    if (!Capacitor.isNativePlatform()) {
+      console.log('📱 Native notification popup:', notification);
+      return;
+    }
+
+    try {
+      // Tampilkan notifikasi popup seperti WhatsApp
+      await LocalNotifications.schedule({
+        notifications: [
+          {
+            id: Date.now() + Math.random() * 1000,
+            title: notification.title || 'Notifikasi Baru',
+            body: notification.message || 'Anda memiliki notifikasi baru',
+            schedule: { at: new Date(Date.now() + 500) }, // Tampilkan segera
+            extra: {
+              notificationId: notification.id,
+              scheduleId: notification.schedule_id,
+              type: notification.metadata?.type || 'general'
+            },
+            sound: 'default',
+            actionTypeId: 'OPEN_ACTIVITY',
+            smallIcon: 'ic_notification'
+          }
+        ]
+      });
+      
+      console.log('✅ Native notification shown:', notification.title);
+    } catch (error) {
+      console.error('❌ Failed to show native notification:', error);
+    }
+  }
+
+  // 🔥 TAMBAHKAN: Register callback untuk realtime notifications
+  onNotificationReceived(callback: (notification: any) => void) {
+    this.notificationCallbacks.push(callback);
+    return () => {
+      this.notificationCallbacks = this.notificationCallbacks.filter(
+        cb => cb !== callback
+      );
+    };
   }
 
   // Request permission
@@ -53,7 +144,7 @@ export class NotificationService {
           },
           sound: 'default',
           actionTypeId: 'OPEN_ACTIVITY',
-          smallIcon: 'ic_notification', // ✅ Diperbaiki dari 'icon' ke 'smallIcon'
+          smallIcon: 'ic_notification',
         }
       ]
     });
@@ -71,7 +162,6 @@ export class NotificationService {
   async cancelAllNotifications() {
     if (!Capacitor.isNativePlatform()) return;
     
-    // ✅ Diperbaiki: Ambil semua yang pending, lalu cancel sekaligus
     const pending = await LocalNotifications.getPending();
     if (pending.notifications.length > 0) {
       await LocalNotifications.cancel({ notifications: pending.notifications });
@@ -86,17 +176,24 @@ export class NotificationService {
   }
 
   // Listen for notification actions (when user taps notification)
-  // ✅ Diperbaiki: Ditambahkan async agar type return-nya cocok saat memakai await
   async addListener(callback: (notification: any) => void) {
     if (!Capacitor.isNativePlatform()) {
       return { remove: () => {} };
     }
 
-    // ✅ Diperbaiki: Tambahkan await sebelum LocalNotifications
     return await LocalNotifications.addListener('localNotificationActionPerformed', (notification) => {
       console.log('🔔 Notification action performed:', notification);
       callback(notification);
     });
+  }
+
+  // 🔥 TAMBAHKAN: Unsubscribe dari realtime
+  unsubscribeFromRealtime() {
+    if (this.realtimeChannel) {
+      this.supabase.removeChannel(this.realtimeChannel);
+      this.realtimeChannel = null;
+      console.log('📡 Unsubscribed from realtime notifications');
+    }
   }
 }
 
